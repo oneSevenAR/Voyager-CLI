@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+URL='https://science.nasa.gov/specials/apps/voyager-vital-signs/assets/javascripts/distance_data.js'
+TMP="$(mktemp)"
+trap 'rm -f "$TMP"' EXIT
+
+curl -s "$URL" > "$TMP" || { echo "failed to fetch $URL" >&2; exit 1; }
+
+get() {
+  local name="$1"
+  grep -Eo "let ${name} *= *-?[0-9]+(\.[0-9]+)?;" "$TMP" | head -n1 \
+    | sed -E "s/let ${name} *= *(-?[0-9]+(\.[0-9]+)?);/\\1/"
+}
+
+epoch_0=$(get epoch_0)
+epoch_1=$(get epoch_1)
+
+dist_0_v1=$(get dist_0_v1)
+dist_1_v1=$(get dist_1_v1)
+dist_0_v2=$(get dist_0_v2)
+dist_1_v2=$(get dist_1_v2)
+
+now_epoch=$(date +%s)
+
+compute_and_print() {
+  local label="$1"
+  local d0="$2"
+  local d1="$3"
+
+  awk -v e0="$epoch_0" -v e1="$epoch_1" -v d0="$d0" -v d1="$d1" -v now="$now_epoch" -v label="$label" 'BEGIN{
+    if(e1==e0){
+      rate=0
+    } else {
+      rate=(d1-d0)/(e1-e0)
+    }
+
+    value = d1 + (now - e1) * rate
+
+    if(label ~ /Voyager 1/) {
+      vel = 17.0
+    } else {
+      vel = 15.0
+    }
+
+    if(value < 0) value = 0
+
+    lsec = value / 299792.458
+
+    hh = int(lsec / 3600)
+    mm = int((lsec % 3600) / 60)
+    ss = int(lsec % 60)
+
+    s = sprintf("%.0f", value)
+    len = length(s)
+    out = ""
+    count = 0
+    for(i=len;i>=1;i--){
+      out = substr(s,i,1) out
+      count++
+      if(count % 3 == 0 && i > 1) out = "," out
+    }
+
+    printf("%s\n  distance   : %s km (%.3fe+00 km)\n  velocity   : %.2f km/s\n  light time : %02d:%02d:%02d (hh:mm:ss)\n\n", label, out, value, vel, hh, mm, ss)
+  }'
+}
+
+compute_and_print "Voyager 1 distance from Earth" "$dist_0_v1" "$dist_1_v1"
+compute_and_print "Voyager 2 distance from Earth" "$dist_0_v2" "$dist_1_v2"
+
