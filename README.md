@@ -1,68 +1,53 @@
 # Voyager CLI
 
-tiny terminal tool that fetches nasas voyager 1 and voyager 2 earth distance data straight from their distance_data js backend and updates every second when used with watch command
+Voyager CLI is a small command-line tool that fetches NASAs Voyager 1 and Voyager 2 Earth-distance data directly from NASAs backend file (distance_data.js). The script interpolates the distance using NASAs timestamps and prints the current distance and one-way light time.
 
-## install user mode
+When used with the watch command the output updates every second.
 
-recommended for normal humans
+## Installation User Mode Recommended
 
-```
+This installs voyager into your home bin directory.
+
+### Option 1 One line install
 curl -fsSL https://raw.githubusercontent.com/oneSevenAR/Voyager-CLI/main/install.sh | bash
-```
 
-or safer
-
-```
+### Option 2 Safer manual installation
 curl -fsSL https://raw.githubusercontent.com/oneSevenAR/Voyager-CLI/main/install.sh -o install.sh
 bash install.sh
-```
 
-## install system wide
+After installation open a new terminal or run
+source ~/.bashrc
 
-needs sudo puts voyager in usr local bin
+## Installation System Wide
 
-```
+This installs voyager into usr local bin which requires sudo
+
 curl -fsSL https://raw.githubusercontent.com/oneSevenAR/Voyager-CLI/main/install.sh -o install.sh
 sudo bash install.sh --system
-```
 
-## usage
+## Usage
 
-just run
-
-```
 voyager
-```
 
-for live updating nasa data
+For live updates every second
+watch -n 1 -t voyager
 
-```
-watch -n 1 voyager
-```
+## What This Tool Does
 
-## what it does
+Downloads NASAs distance_data.js file  
+Extracts Voyager Earth distance  
+Interpolates live distance using NASAs timestamps  
+Uses NASAs real velocities  
+Computes one way light time  
+Prints formatted output  
 
-pulls nasa distance_data js  
-extracts voyager earth distance  
-interpolates to current time  
-uses real nasa velocities  
-computes one way light time  
-prints clean human readable output
+## Uninstall
 
-## uninstall
-
-user mode
-
-```
+User mode
 rm -f ~/bin/voyager
-```
 
-system mode
-
-```
+System mode
 sudo rm -f /usr/local/bin/voyager
-```
 
-## repo
-
+## Repository
 https://github.com/oneSevenAR/Voyager-CLI
