@@ -7,6 +7,16 @@ trap 'rm -f "$TMP"' EXIT
 
 curl -s "$URL" > "$TMP" || { echo "failed to fetch $URL" >&2; exit 1; }
 
+# fetch headers to get last modified time
+LAST_MODIFIED=$(curl -sI "$URL" | grep -i "Last-Modified" | cut -d':' -f2- | xargs)
+
+if [ -n "$LAST_MODIFIED" ]; then
+  echo "NASA distance_data.js last updated: $LAST_MODIFIED"
+else
+  echo "NASA distance_data.js last update time not available"
+fi
+
+
 get() {
   local name="$1"
   grep -Eo "let ${name} *= *-?[0-9]+(\.[0-9]+)?;" "$TMP" | head -n1 \
