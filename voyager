@@ -7,7 +7,6 @@ trap 'rm -f "$TMP"' EXIT
 
 curl -s "$URL" > "$TMP" || { echo "failed to fetch $URL" >&2; exit 1; }
 
-# fetch headers to get last modified time
 LAST_MODIFIED=$(curl -sI "$URL" | grep -i "Last-Modified" | cut -d':' -f2- | xargs)
 
 if [ -n "$LAST_MODIFIED" ]; then
@@ -15,7 +14,7 @@ if [ -n "$LAST_MODIFIED" ]; then
 else
   echo "NASA distance_data.js last update time not available"
 fi
-
+echo
 
 get() {
   local name="$1"
@@ -33,30 +32,65 @@ dist_1_v2=$(get dist_1_v2)
 
 now_epoch=$(date +%s)
 
+CACHEFILE="$HOME/.cache/voyager_last_run"
+mkdir -p "$HOME/.cache"
+
+load_last() {
+  if [ -f "$CACHEFILE" ]; then
+    read LAST_TIME LAST_V1 LAST_V2 < "$CACHEFILE"
+  else
+    LAST_TIME=""
+    LAST_V1=""
+    LAST_V2=""
+  fi
+}
+
+save_current() {
+  v1_full=$(printf "%.0f" "$curr_v1")
+  v2_full=$(printf "%.0f" "$curr_v2")
+  echo "$now_epoch $v1_full $v2_full" > "$CACHEFILE"
+}
+
+format_commas() {
+  echo "$1" | sed ':a;s/\B[0-9]\{3\}\>/,&/;ta'
+}
+
+load_last
+
+compute_one() {
+  awk -v e0="$epoch_0" -v e1="$epoch_1" -v d0="$1" -v d1="$2" -v now="$now_epoch" '
+    BEGIN {
+      if (e1 == e0) rate = 0
+      else rate = (d1 - d0) / (e1 - e0)
+
+      value = d1 + (now - e1) * rate
+
+      # force full integer no scientific notation
+      printf "%.0f\n", value
+    }
+  '
+}
+
+
+curr_v1=$(compute_one "$dist_0_v1" "$dist_1_v1")
+curr_v2=$(compute_one "$dist_0_v2" "$dist_1_v2")
+
 compute_and_print() {
   local label="$1"
   local d0="$2"
   local d1="$3"
 
-  awk -v e0="$epoch_0" -v e1="$epoch_1" -v d0="$d0" -v d1="$d1" -v now="$now_epoch" -v label="$label" 'BEGIN{
-    if(e1==e0){
-      rate=0
-    } else {
-      rate=(d1-d0)/(e1-e0)
-    }
+  awk -v e0="$epoch_0" -v e1="$epoch_1" -v d0="$d0" -v d1="$d1" -v now="$now_epoch" -v label="$label" '
+  BEGIN{
+    if(e1==e0) rate=0
+    else rate=(d1-d0)/(e1-e0)
 
     value = d1 + (now - e1) * rate
-
-    if(label ~ /Voyager 1/) {
-      vel = 17.0
-    } else {
-      vel = 15.0
-    }
+    vel = rate
 
     if(value < 0) value = 0
 
     lsec = value / 299792.458
-
     hh = int(lsec / 3600)
     mm = int((lsec % 3600) / 60)
     ss = int(lsec % 60)
@@ -71,10 +105,30 @@ compute_and_print() {
       if(count % 3 == 0 && i > 1) out = "," out
     }
 
-    printf("%s\n  distance   : %s km (%.3fe+00 km)\n  velocity   : %.2f km/s\n  light time : %02d:%02d:%02d (hh:mm:ss)\n\n", label, out, value, vel, hh, mm, ss)
+    printf("%s\n", label)
+    printf("  distance   : %s km (%.3fe+00 km)\n", out, value)
+    printf("  velocity   : %.6f km/s\n", vel)
+    printf("  light time : %02d:%02d:%02d (hh:mm:ss)\n\n", hh, mm, ss)
   }'
 }
 
 compute_and_print "Voyager 1 distance from Earth" "$dist_0_v1" "$dist_1_v1"
 compute_and_print "Voyager 2 distance from Earth" "$dist_0_v2" "$dist_1_v2"
+
+if [ -n "$LAST_TIME" ] && [ -n "${LAST_V1:-}" ] && [ -n "${LAST_V2:-}" ]; then
+  echo "since last run ($(date -d @$LAST_TIME)):"
+
+  d1=$(echo "$curr_v1 - $LAST_V1" | bc -l)
+  d2=$(echo "$curr_v2 - $LAST_V2" | bc -l)
+
+  d1_full=$(printf "%.0f" "$d1")
+  d2_full=$(printf "%.0f" "$d2")
+
+  echo "  voyager 1 covered: $(format_commas "$d1_full") km"
+  echo "  voyager 2 covered: $(format_commas "$d2_full") km"
+else
+  echo "no previous run data to compare"
+fi
+
+save_current
 
