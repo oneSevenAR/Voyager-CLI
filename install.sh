@@ -1,87 +1,87 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# URLs for downloading voyager and installer
-BASE_URL="https://raw.githubusercontent.com/oneSevenAR/Voyager-CLI/main"
-VOYAGER_URL="$BASE_URL/voyager"
+# ----------------------------------------
+# CONFIG
+# ----------------------------------------
+VOYAGER_SCRIPT="voyager"
+INSTALL_SYSTEM=false
 
-INSTALL_DIR="$HOME/bin"
-SYSTEM_DIR="/usr/local/bin"
-
-MODE="user"
-
-# Parse arguments (default = user mode)
-for arg in "$@"; do
-  case "$arg" in
-    --system)
-      MODE="system"
-      ;;
-    --user)
-      MODE="user"
-      ;;
-  esac
-done
-
-# Determine source location of voyager
-if [ -f "./voyager" ]; then
-  SOURCE_LOCAL="./voyager"
-else
-  SOURCE_LOCAL=""
+# ----------------------------------------
+# PARSE FLAGS
+# ----------------------------------------
+if [[ "${1:-}" == "--system" ]]; then
+    INSTALL_SYSTEM=true
 fi
 
-download_voyager() {
-  echo "Downloading voyager from $VOYAGER_URL..."
-  curl -fsSL "$VOYAGER_URL" -o voyager_temp
-  chmod +x voyager_temp
+# ----------------------------------------
+# FUNCTIONS
+# ----------------------------------------
+
+need_cmd() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-#########################################
-# SYSTEM INSTALLATION MODE
-#########################################
+install_dep_system() {
+    local pkg="$1"
+    if ! need_cmd "$pkg"; then
+        echo "dependency missing: $pkg (installing)"
+        apt-get update -y >/dev/null
+        apt-get install -y "$pkg" >/dev/null
+    fi
+}
 
-if [ "$MODE" = "system" ]; then
-  DEST="$SYSTEM_DIR/voyager"
+check_dep_user() {
+    local pkg="$1"
+    if ! need_cmd "$pkg"; then
+        echo "WARNING: required command '$pkg' not found."
+        echo "Install it manually:"
+        echo "  sudo apt install $pkg"
+        echo ""
+    fi
+}
 
-  echo "Installing system-wide (requires sudo)..."
-  sudo mkdir -p "$SYSTEM_DIR"
+# ----------------------------------------
+# SYSTEM MODE INSTALL
+# ----------------------------------------
+if $INSTALL_SYSTEM; then
+    echo "[system install] installing voyager into /usr/local/bin"
 
-  if [ -n "$SOURCE_LOCAL" ]; then
-    sudo cp "$SOURCE_LOCAL" "$DEST"
-  else
-    download_voyager
-    sudo cp voyager_temp "$DEST"
-    rm -f voyager_temp
-  fi
+    # install deps
+    install_dep_system curl
+    install_dep_system bc
 
-  sudo chmod +x "$DEST"
-  echo "Installed system-wide at: $DEST"
-  exit 0
+    # copy script
+    install -m 0755 "$VOYAGER_SCRIPT" /usr/local/bin/
+
+    echo "done."
+    exit 0
 fi
 
-#########################################
-# USER INSTALLATION MODE
-#########################################
+# ----------------------------------------
+# USER MODE INSTALL
+# ----------------------------------------
+echo "[user install] installing voyager into ~/bin"
 
-DEST="$INSTALL_DIR/voyager"
+# warn but do not install dependencies
+check_dep_user curl
+check_dep_user bc
 
-mkdir -p "$INSTALL_DIR"
+# ensure ~/bin exists
+mkdir -p "$HOME/bin"
 
-if [ -n "$SOURCE_LOCAL" ]; then
-  cp "$SOURCE_LOCAL" "$DEST"
-else
-  download_voyager
-  mv voyager_temp "$DEST"
+# copy script
+cp "$VOYAGER_SCRIPT" "$HOME/bin/"
+chmod +x "$HOME/bin/voyager"
+
+# ensure PATH contains ~/bin
+if [[ ":$PATH:" != *":$HOME/bin:"* ]]; then
+    echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
+    echo "added ~/bin to PATH in ~/.bashrc"
 fi
 
-chmod +x "$DEST"
-
-# Add ~/bin to PATH if missing
-if ! echo "$PATH" | grep -q "$HOME/bin"; then
-  echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
-  echo "Added ~/bin to your PATH in ~/.bashrc."
-  echo "Open a new terminal for changes to take effect."
-fi
-
-echo "Installation complete."
-echo "Run 'voyager' to test."
+echo "done."
+echo ""
+echo "open a new terminal or run:"
+echo "    source ~/.bashrc"
 
